@@ -1,64 +1,40 @@
-import { Injectable } from '@nestjs/common';
-import { Category } from './entities/category.entity';
+import { Injectable, HttpStatus, HttpException } from '@nestjs/common';
+import { Model } from 'mongoose';
+import { InjectModel } from '@nestjs/mongoose';
+import { Category, CategorySchema } from '../../schemas/category.schema';
+// import { Category } from './entities/category.entity';
 import { CreateCategoryDto } from './dtos/create-category.dto'
+import { UpdateCategoryDto } from './dtos/update-category.dto'
 
 @Injectable()
 export class CategoryService {
-	private categories: Category[] = [];
 
+  constructor(@InjectModel(Category.name) private categoryModel: Model<Category>) {}
 
-  searchById(list: Category[], id: number){
-  	const result = list.filter(function(ele){
-  		return ele.id == id;
-  	})
-  	if(result[0]) return result[0];
-  	else return null;
-  }	
-
-  searchByName(list: Category[], name: String){
-  	const result = list.filter(function(ele){
-  		return ele.name == name;
-  	})
-  	if(result[0]) return true;
-  	else return false;
-  }	
-
-  create(createCategoryDto: CreateCategoryDto) {
-
-  	if(this.searchByName(this.categories, createCategoryDto.name)) return null;
-
-    let c = new Category()
-    c.id = Math.floor(Math.random()*999);
-    c.name = createCategoryDto.name;
-    c.status = createCategoryDto.status;
-    this.categories.push(c);
-    return c;
+  create(createCategoryDto: CreateCategoryDto): Promise<Category>{
+    const createdCategory = new this.categoryModel(createCategoryDto)
+    return createdCategory.save();
   }
 
-  update(id: number, createCategoryDto: CreateCategoryDto) {
-  	let category = this.findOne(id);
-  	if(!category) return {statusCode: 404, message: 'Not found'};
-
-  	if(this.searchByName(this.categories, createCategoryDto.name)) return {statusCode: 409, message: 'duplicate exist'};
-
-    category.name = createCategoryDto.name;
-    category.status = createCategoryDto.status;
-    return category;
+  async update(id: string, updateCategoryDto: UpdateCategoryDto) {
+  	let existing = await this.categoryModel.findOne({ "name": updateCategoryDto.name, "_id" : { $ne: id}}).exec();
+    if (existing === null) {
+      return this.categoryModel.findByIdAndUpdate(id, updateCategoryDto, {new: true});
+    } else {
+      throw new HttpException("Brand with name " + updateCategoryDto.name + " already exists", HttpStatus.BAD_REQUEST);
+    }
   }
 
-  findOne(id: number) {
-  	return this.searchById(this.categories, id) 
+  async findOne(id: string): Promise<Category> {
+    return this.categoryModel.findById(id).exec();
   }
 
-  findAll(): Category[] {
-    return this.categories;
+  async findAll() {
+    return this.categoryModel.find().exec();;
   }
 
-  remove(id: number): String {
-  	this.categories = this.categories.filter(function(ele){
-  		return ele.id != id;
-  	})
-  	return `Removed category with  id #${id} `;
+  async remove(id: string) {
+    return this.categoryModel.findByIdAndDelete(id).exec();
   }
 
 }
